@@ -1,6 +1,10 @@
 import os
 import streamlit as st
+from dotenv import load_dotenv
 from groq import Groq
+
+# Carrega variáveis de ambiente do arquivo .env
+load_dotenv()
 
 # Configuração da página
 st.set_page_config(
@@ -10,11 +14,10 @@ st.set_page_config(
 )
 
 # Inicialização do cliente Groq
-# No Render, a variável de ambiente GROQ_API_KEY deve ser configurada
 api_key = os.environ.get("GROQ_API_KEY")
 
 if not api_key:
-    st.error("Chave de API do Groq não encontrada. Configure a variável GROQ_API_KEY.")
+    st.error("Chave de API do Groq não encontrada. Configure a variável GROQ_API_KEY no arquivo .env ou nas variáveis do Render.")
     st.stop()
 
 client = Groq(api_key=api_key)
@@ -25,21 +28,6 @@ if "lembretes" not in st.session_state:
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
-
-# System Prompt focado em empatia, paciência e acolhimento
-SYSTEM_PROMPT = f"""
-Você é o 'LembreMente', um assistente virtual extremamente carismático, paciente, gentil e carinhoso.
-Seu objetivo principal é ajudar pessoas com perda de memória ou Alzheimer a se lembrarem de seus compromissos, rotinas, medicação e tarefas diárias.
-
-Instruções de Comportamento:
-1. Responda SEMPRE de forma calma, acolhedora, com frases curtas, claras e fáceis de entender.
-2. Seja reconfortante. Caso o usuário demonstre confusão ou ansiedade, acalme-o com carinho.
-3. Utilize os lembretes cadastrados no sistema para responder às dúvidas do usuário sobre compromissos.
-4. Se o usuário perguntar algo que não está cadastrado nos lembretes, responda com gentileza e sugira cadastrar na aba lateral.
-
-Lembretes Atualmente Cadastrados no Sistema:
-{st.session_state.lembretes if st.session_state.lembretes else "Nenhum lembrete cadastrado até o momento."}
-"""
 
 # Interface Principal
 st.title("💛 LembreMente")
@@ -84,8 +72,23 @@ if user_input := st.chat_input("Como posso te ajudar agora? (ex: 'O que tenho pa
     with st.chat_message("user"):
         st.markdown(user_input)
 
+    # Monta o System Prompt dinamicamente com a lista de lembretes atualizada
+    system_prompt = f"""
+Você é o 'LembreMente', um assistente virtual extremamente carismático, paciente, gentil e carinhoso.
+Seu objetivo principal é ajudar pessoas com perda de memória ou Alzheimer a se lembrarem de seus compromissos, rotinas, medicação e tarefas diárias.
+
+Instruções de Comportamento:
+1. Responda SEMPRE de forma calma, acolhedora, com frases curtas, claras e fáceis de entender.
+2. Seja reconfortante. Caso o usuário demonstre confusão ou ansiedade, acalme-o com carinho.
+3. Utilize os lembretes cadastrados no sistema para responder às dúvidas do usuário sobre compromissos.
+4. Se o usuário perguntar algo que não está cadastrado nos lembretes, responda com gentileza e sugira cadastrar na aba lateral.
+
+Lembretes Atualmente Cadastrados no Sistema:
+{st.session_state.lembretes if st.session_state.lembretes else "Nenhum lembrete cadastrado até o momento."}
+"""
+
     # Prepara o contexto para a API do Groq
-    messages_payload = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages_payload = [{"role": "system", "content": system_prompt}]
     for msg in st.session_state.messages:
         messages_payload.append({"role": msg["role"], "content": msg["content"]})
 
@@ -95,7 +98,7 @@ if user_input := st.chat_input("Como posso te ajudar agora? (ex: 'O que tenho pa
             try:
                 chat_completion = client.chat.completions.create(
                     messages=messages_payload,
-                    model="llama-3.3-70b-versatile",
+                    model="openai/gpt-oss-120b",
                     temperature=0.5,
                     max_tokens=500,
                 )
@@ -105,4 +108,4 @@ if user_input := st.chat_input("Como posso te ajudar agora? (ex: 'O que tenho pa
                 # Salva a resposta no histórico
                 st.session_state.messages.append({"role": "assistant", "content": response})
             except Exception as e:
-                st.error("Ops! Tive um probleminha para responder. Pode perguntar de novo?")
+                st.error(f"Ops! Ocorreu um erro ao conectar com o assistente: {e}")
